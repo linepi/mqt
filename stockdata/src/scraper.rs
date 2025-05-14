@@ -11,6 +11,7 @@ pub fn init_webdriver_config() -> serde_json::map::Map<String, serde_json::Value
     // 添加Chrome选项
     let chrome_opts = serde_json::json!({
         "args": [
+            "--headless",
             "--disable-gpu",
             "--no-sandbox",
             "--disable-dev-shm-usage",

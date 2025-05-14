@@ -155,24 +155,30 @@ pub struct StockData {
 // 字符串转换为数值的辅助函数
 pub fn parse_f64(s: &str) -> f64 {
     // 移除百分号、逗号、货币符号和引号，并转换为浮点数
-    let s = s.trim().replace("%", "").replace(',', "").replace("CNY", "").replace('"', "");
+    let s = s.trim()
+        .replace("%", "")
+        .replace(',', "")
+        .replace("CNY", "")
+        .replace('"', "")
+        .replace(' ', "");
     
-    if s.is_empty() || s == "—" || s == "-" {
-        return 0.0;
+    if s.is_empty() || s == "—" || s == "-" || s == "−" {
+        return -404.0;
     }
     
     // 处理带有正负号的值
     let multiplier = if s.starts_with('+') { 1.0 } 
                      else if s.starts_with('-') { -1.0 } 
                      else if s.starts_with('—') { -1.0 } 
+                     else if s.starts_with('−') { -1.0 } 
                      else { 1.0 };
     
     // 提取数字部分
-    let num_str = s.trim_start_matches('+').trim_start_matches('-');
+    let num_str = s.trim_start_matches('+').trim_start_matches('-').trim_start_matches('—').trim_start_matches('−');
     
     match num_str.parse::<f64>() {
         Ok(val) => val * multiplier,
-        Err(_) => 0.0
+        Err(_) => -500.0
     }
 }
 
@@ -185,48 +191,58 @@ pub fn parse_percentage(s: &str) -> f64 {
 
 // 解析大数值（带B,M,K后缀的）到i64
 pub fn parse_large_number(s: &str) -> i64 {
-    let s = s.trim().replace(',', "").replace("CNY", "");
+    let s = s.trim()
+        .replace(',', "")
+        .replace("CNY", "")
+        .replace('"', "")
+        .replace(' ', "");
     
-    if s.is_empty() || s == "—" || s == "-" {
-        return 0;
+    if s.is_empty() || s == "—" || s == "-" || s == "−" {
+        return -404;
     }
+
+    let multiplier = if s.starts_with('+') { 1.0 } 
+                     else if s.starts_with('-') { -1.0 } 
+                     else if s.starts_with('—') { -1.0 } 
+                     else if s.starts_with('−') { -1.0 } 
+                     else { 1.0 };
     
     // 处理带有单位的值
     let mut value = 0.0;
-    let s = s.trim_start_matches('+').trim_start_matches('-').trim_start_matches('—');
+    let s = s.trim_start_matches('+').trim_start_matches('-').trim_start_matches('—').trim_start_matches('−');
     
     if s.contains('T') {
         // 兆（万亿）
         if let Some(num_str) = s.split('T').next() {
             if let Ok(num) = num_str.trim().parse::<f64>() {
-                value = num * 1_000_000_000_000.0;
+                value = num * 1_000_000_000_000.0 * multiplier;
             }
         }
     } else if s.contains('B') {
         // 十亿
         if let Some(num_str) = s.split('B').next() {
             if let Ok(num) = num_str.trim().parse::<f64>() {
-                value = num * 1_000_000_000.0;
+                value = num * 1_000_000_000.0 * multiplier;
             }
         }
     } else if s.contains('M') {
         // 百万
         if let Some(num_str) = s.split('M').next() {
             if let Ok(num) = num_str.trim().parse::<f64>() {
-                value = num * 1_000_000.0;
+                value = num * 1_000_000.0 * multiplier;
             }
         }
     } else if s.contains('K') {
         // 千
         if let Some(num_str) = s.split('K').next() {
             if let Ok(num) = num_str.trim().parse::<f64>() {
-                value = num * 1_000.0;
+                value = num * 1_000.0 * multiplier;
             }
         }
     } else {
         // 没有单位，直接解析
         if let Ok(num) = s.parse::<f64>() {
-            value = num;
+            value = num * multiplier;
         }
     }
     
@@ -618,3 +634,19 @@ pub fn merge_stock_data(dest: &mut StockData, src: &StockData) {
         dest.candlestick_pattern = src.candlestick_pattern.clone();
     }
 } 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_f64() {
+        assert_eq!(parse_f64("123.45%"), 123.45);
+        assert_eq!(parse_f64("+123.45%"), 123.45);
+        assert_eq!(parse_f64("-123.45%"), -123.45);
+        assert_eq!(parse_f64("—123.45%"), -123.45);
+        assert_eq!(parse_f64("−2.02%"), -123.45);
+        assert_eq!(parse_f64("4.16 CNY"), 4.16);
+        assert_eq!(parse_f64("-4.16 CNY"), -4.16);
+    }
+}
