@@ -393,6 +393,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "common",
  "env_logger",
  "log",
  "reqwest",
@@ -401,6 +402,10 @@ dependencies = [
  "server",
  "tokio",
 ]
+
+[[package]]
+name = "common"
+version = "0.1.0"
 
 [[package]]
 name = "convert_case"
@@ -1114,6 +1119,7 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "chrono",
+ "common",
  "env_logger",
  "fantoccini",
  "log",
@@ -1272,8 +1278,10 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "chrono",
+ "common",
  "env_logger",
  "log",
+ "reqwest",
  "serde",
  "serde_json",
  "stockdata",
@@ -1586,6 +1594,7 @@ dependencies = [
  "actix-cors",
  "actix-web",
  "chrono",
+ "common",
  "env_logger",
  "fantoccini",
  "log",

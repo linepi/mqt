@@ -1,16 +1,20 @@
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder, get, post};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use log::{info, error};
 use std::sync::{Arc, Mutex};
 use std::process::Child;
+use std::collections::HashMap;
 
 // 定义模块状态
 pub struct StockDataState {
     pub client: Option<fantoccini::Client>,
     pub chrome_driver: Option<Child>,
     pub is_fetching: bool,
-    pub last_fetch: Option<chrono::DateTime<chrono::Utc>>,
     pub fetched_data: Vec<stockdata::models::StockData>,
+    pub fetch_data_last_fetch: Option<chrono::DateTime<chrono::Utc>>,
+    pub fetched_price: HashMap<String, f64>,
+    pub fetched_price_last_fetch: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl StockDataState {
@@ -19,8 +23,10 @@ impl StockDataState {
             client: None,
             chrome_driver: None,
             is_fetching: false,
-            last_fetch: None,
+            fetch_data_last_fetch: None,
             fetched_data: Vec::new(),
+            fetched_price: HashMap::new(),
+            fetched_price_last_fetch: None,
         }
     }
 }
@@ -38,6 +44,7 @@ pub struct FetchResponse {
 }
 
 // 初始化WebDriver
+#[post("/init")]
 pub async fn init_webdriver(state: web::Data<Arc<Mutex<StockDataState>>>) -> impl Responder {
     {
         let state = state.lock().unwrap();
@@ -73,6 +80,7 @@ pub async fn init_webdriver(state: web::Data<Arc<Mutex<StockDataState>>>) -> imp
 }
 
 // 关闭WebDriver
+#[post("/close")]
 pub async fn close_webdriver(state: web::Data<Arc<Mutex<StockDataState>>>) -> impl Responder {
     let mut state = state.lock().unwrap();
     
@@ -122,6 +130,7 @@ pub async fn close_webdriver(state: web::Data<Arc<Mutex<StockDataState>>>) -> im
 }
 
 // 抓取股票数据
+#[post("/fetch")]
 pub async fn fetch_data(state: web::Data<Arc<Mutex<StockDataState>>>, req: web::Json<FetchRequest>) -> impl Responder {
     // 检查是否可以开始抓取
     let client_option = {
@@ -141,7 +150,7 @@ pub async fn fetch_data(state: web::Data<Arc<Mutex<StockDataState>>>, req: web::
         
         state.is_fetching = true;
         state.fetched_data.clear();
-        state.last_fetch = Some(chrono::Utc::now());
+        state.fetch_data_last_fetch = Some(chrono::Utc::now());
         state.client.as_ref().unwrap().clone()
     };
     
@@ -180,6 +189,7 @@ pub async fn fetch_data(state: web::Data<Arc<Mutex<StockDataState>>>, req: web::
 }
 
 // 获取WebDriver状态
+#[get("/status")]
 pub async fn get_stockdata_status(state: web::Data<Arc<Mutex<StockDataState>>>) -> impl Responder {
     info!("获取WebDriver状态");
     
@@ -187,15 +197,75 @@ pub async fn get_stockdata_status(state: web::Data<Arc<Mutex<StockDataState>>>) 
     
     let status = serde_json::json!({
         "initialized": state.client.is_some(),
-        "last_fetch": state.last_fetch.map(|dt| dt.to_rfc3339()),
+        "last_fetch": state.fetch_data_last_fetch.map(|dt| dt.to_rfc3339()),
         "data_count": state.fetched_data.len()
     });
     
     HttpResponse::Ok().json(status)
 }
 
+#[get("/price")]
+pub async fn get_price(state: web::Data<Arc<Mutex<StockDataState>>>, 
+    web::Query(params): web::Query<HashMap<String, String>>) -> impl Responder {
+    info!("获取股票价格");
+    
+    let client_option = {
+        let mut state = state.lock().unwrap();
+        
+        if state.is_fetching {
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "error": "数据抓取正在进行中"
+            }));
+        }
+        
+        if state.client.is_none() {
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "error": "WebDriver未初始化, 请先调用init接口"
+            }));
+        }
+        
+        state.is_fetching = true;
+        state.client.as_ref().unwrap().clone()
+    };
+
+    let mut state = state.lock().unwrap();
+
+    if state.fetched_price.is_empty() || Utc::now().signed_duration_since(state.fetched_price_last_fetch.unwrap()) > chrono::Duration::seconds(60) {
+        let price_map = stockdata::scraper::fetch_price(&client_option).await; 
+        state.is_fetching = false;
+
+        state.fetched_price = match price_map {
+            Ok(map) => map,
+            Err(e) => {
+                error!("获取股票价格失败: {}", e);
+                return HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("获取股票价格失败: {}", e)
+                }));
+            }
+        };
+
+        state.fetched_price_last_fetch = Some(chrono::Utc::now());
+    } 
+
+    
+    // 检查是否提供了code参数
+    if let Some(code) = params.get("code") {
+        if let Some(price) = state.fetched_price.get(code) {
+            HttpResponse::Ok().json(price)
+        } else {
+            HttpResponse::NotFound().json(serde_json::json!({
+                "error": format!("未找到代码为{}的股票价格", code)
+            }))
+        }
+    } else {
+        HttpResponse::Ok().json(&state.fetched_price)
+    }
+}
+
 // 获取抓取的数据
-pub async fn get_stockdata(state: web::Data<Arc<Mutex<StockDataState>>>) -> impl Responder {
+#[get("/data")]
+pub async fn get_stockdata(state: web::Data<Arc<Mutex<StockDataState>>>, 
+    web::Query(params): web::Query<HashMap<String, String>>) -> impl Responder {
     info!("获取抓取的数据");
     
     let state = state.lock().unwrap();
@@ -206,5 +276,23 @@ pub async fn get_stockdata(state: web::Data<Arc<Mutex<StockDataState>>>) -> impl
         }));
     }
     
-    HttpResponse::Ok().json(&state.fetched_data)
+    // 检查是否提供了code参数
+    if let Some(code) = params.get("code") {
+        // 如果提供了code参数，过滤匹配的数据
+        let filtered_data: Vec<_> = state.fetched_data.iter()
+            .filter(|stock| stock.code == *code)
+            .collect();
+            
+        if filtered_data.is_empty() {
+            return HttpResponse::NotFound().json(serde_json::json!({
+                "error": format!("未找到代码为{}的股票数据", code)
+            }));
+        }
+        
+        // 返回第一个匹配的数据（单个对象而不是数组）
+        HttpResponse::Ok().json(filtered_data[0])
+    } else {
+        // 如果没有提供code参数，返回所有数据
+        HttpResponse::Ok().json(&state.fetched_data)
+    }
 }

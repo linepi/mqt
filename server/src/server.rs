@@ -1,8 +1,6 @@
 use actix_web::{web, HttpResponse, Responder};
 use serde::Serialize;
 
-// =============== 服务器状态 ===============
-
 pub struct ServerState {
     pub start_time: chrono::DateTime<chrono::Utc>,
     pub version: String,

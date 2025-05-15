@@ -306,3 +306,55 @@ pub fn get_tab_click_script(tab_id: &str) -> String {
         tab_id
     )
 }
+
+pub fn update_search_input_script(code: &str) -> String {
+    format!(
+        r#"
+        function sleep(ms) {{
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }}
+
+        async function simulateUserTyping(element, text) {{
+            element.focus();
+            element.select();
+            element.value = '';
+            
+            // 模拟逐个字符输入
+            for(let i = 0; i < text.length; i++) {{
+                element.value += text[i];
+                await sleep(500);
+
+                // 触发多种事件
+                element.dispatchEvent(new InputEvent('input', {{bubbles: true, data: text[i], inputType: 'insertText'}}));
+                element.dispatchEvent(new KeyboardEvent('keydown', {{key: text[i], code: `Key${{text[i].toUpperCase()}}`}}));
+                element.dispatchEvent(new KeyboardEvent('keypress', {{key: text[i], code: `Key${{text[i].toUpperCase()}}`}}));
+                element.dispatchEvent(new KeyboardEvent('keyup', {{key: text[i], code: `Key${{text[i].toUpperCase()}}`}}));
+            }}
+        }}
+
+        var searchButton = document.querySelector('.searchButton-cfjBjL5J');
+        if (searchButton) {{
+            searchButton.click();
+        }}
+
+        const container = document.querySelector('span[data-qa-id="ui-lib-Input"]');
+        const input = container.querySelector('input');
+
+        const mouseEvents = ['mousedown', 'mouseup', 'click'];
+        mouseEvents.forEach(type => {{
+            container.dispatchEvent(new MouseEvent(type, {{
+                bubbles: true,
+                cancelable: true,
+                view: window
+            }}));
+        }});
+
+        input.focus();
+
+        simulateUserTyping(input, '{}');
+        
+        "#,
+        code
+    )
+    
+}

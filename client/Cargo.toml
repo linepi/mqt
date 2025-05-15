@@ -12,3 +12,4 @@ log = { workspace = true }
 env_logger = { workspace = true }
 chrono = { workspace = true } 
 server = { path = "../server" }
+common = { path = "../common" }

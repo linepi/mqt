@@ -1,4 +1,4 @@
-use std::process::{Command, Child};
+use std::{collections::HashMap, process::{Child, Command}};
 use fantoccini::Client;
 use serde_json::{self, Value};
 use crate::tabs::TabType;
@@ -13,7 +13,7 @@ pub fn init_webdriver_config() -> serde_json::map::Map<String, serde_json::Value
     // 添加Chrome选项
     let chrome_opts = serde_json::json!({
         "args": [
-            "--headless",
+            // "--headless",
             "--disable-gpu",
             "--no-sandbox",
             "--disable-dev-shm-usage",
@@ -51,14 +51,25 @@ pub async fn create_webdriver_client() -> Result<(Child, Client), Box<dyn std::e
     };
     
     // 连接到WebDriver - 简化此处代码, 移除临时变量
-    let client = match 
-        fantoccini::ClientBuilder::native().capabilities(caps).connect("http://localhost:9516").await {
-        Ok(client) => client,
-        Err(e) => {
-            let _ = chrome_driver.kill();
-            let err_msg = format!("连接到WebDriver失败: {}", e);
-            error!("{}", err_msg);
-            return Err(err_msg.into());
+    let mut retry_count = 0;
+    let client = loop {
+        match fantoccini::ClientBuilder::native()
+            .capabilities(caps.clone())
+            .connect("http://localhost:9516")
+            .await 
+        {
+            Ok(client) => break client,
+            Err(e) => {
+                retry_count += 1;
+                if retry_count >= 5 {
+                    let _ = chrome_driver.kill();
+                    let err_msg = format!("连接到WebDriver失败: {}", e);
+                    error!("{}", err_msg);
+                    return Err(err_msg.into());
+                }
+                error!("连接失败,重试第{}次: {}", retry_count, e);
+                tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+            }
         }
     };
     
@@ -129,8 +140,64 @@ pub async fn switch_to_tab(client: &Client, tab: TabType) -> Result<(), Box<dyn 
     Ok(())
 }
 
+async fn open_tradingview_page(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
+    // 检查当前URL是否已经在TradingView页面
+    let current_url = client.current_url().await?;
+    let is_tradingview = current_url.as_str().contains("cn.tradingview.com/screener");
+    
+    // 如果不在TradingView页面,则跳转
+    if !is_tradingview {
+        client.goto("https://cn.tradingview.com/screener/").await?;
+    }
+    
+    // 检查页面是否已加载完成
+    let loaded = client.execute(scripts::get_page_loaded_check_script(), vec![]).await?;
+    if !loaded.as_bool().unwrap_or(false) {
+        // 等待页面加载完成
+        wait_until_script_return_true(
+            &client,
+            scripts::get_page_loaded_check_script(),
+            200,
+            10000
+        ).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn fetch_price(client: &Client) -> Result<HashMap<String, f64>, Box<dyn std::error::Error>> {
+    open_tradingview_page(&client).await?;
+
+    match scroll_to_load_all(&client).await {
+        Ok(_) => {},
+        Err(e) => {
+            return Err(format!("滚动加载失败: {}", e.to_string()).into());
+        }
+    }
+
+    let stocks = fetch_stock_data_from_tab(&client, TabType::Overview).await?;
+
+    let mut price_map = HashMap::new();
+    for stock in stocks {
+        price_map.insert(stock.code, stock.price);
+    }
+
+    Ok(price_map)
+}
+
+// TODO: 目前脚本输入代码后，列表不跟新
+pub async fn fetch_stock_data_with_code(client: &Client, code: &str) -> Result<StockData, Box<dyn std::error::Error>> {
+    open_tradingview_page(client).await?;
+
+    client.execute(&scripts::update_search_input_script(code), vec![]).await?;
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+    Ok(StockData::default())
+}
+
 // 使用JavaScript执行数据抓取, 获取所有标签页的股票数据
-pub async fn fetch_stock_data(client: &Client) -> Result<Vec<StockData>, Box<dyn std::error::Error>> {
+pub async fn fetch_stock_data_all(client: &Client) -> Result<Vec<StockData>, Box<dyn std::error::Error>> {
     info!("开始从所有标签页获取股票数据...");
     
     // 存储每个标签页的数据集合
@@ -185,26 +252,7 @@ pub async fn perform_fetch(
     client: Client, 
     save_to_file: bool
 ) -> Result<Vec<StockData>, Box<dyn std::error::Error>> {
-    // 打开TradingView筛选器页面
-    match client.goto("https://cn.tradingview.com/screener/").await {
-        Ok(_) => {},
-        Err(e) => {
-            return Err(format!("打开TradingView页面失败: {}", e).into());
-        }
-    }
-    
-    // 等待页面加载完成
-    match wait_until_script_return_true(
-        &client, 
-        scripts::get_page_loaded_check_script(), 
-        200, 
-        10000
-    ).await {
-        Ok(_) => {},
-        Err(e) => {
-            return Err(format!("等待页面加载失败: {}", e.to_string()).into());
-        }
-    }
+    open_tradingview_page(&client).await?;
 
     match scroll_to_load_all(&client).await {
         Ok(_) => {},
@@ -214,7 +262,7 @@ pub async fn perform_fetch(
     }
     
     // 获取所有标签页的股票数据
-    let stocks = match fetch_stock_data(&client).await {
+    let stocks = match fetch_stock_data_all(&client).await {
         Ok(stocks) => stocks,
         Err(e) => {
             return Err(format!("获取股票数据失败: {}", e.to_string()).into());
@@ -231,4 +279,19 @@ pub async fn perform_fetch(
     }
     
     Ok(stocks)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_fetch_stock_data_with_code() {
+        let (mut chrome_driver, client) = create_webdriver_client().await.unwrap();
+        let code = "601398";
+        let _stock_data = fetch_stock_data_with_code(&client, &code).await.unwrap();
+        chrome_driver.kill().unwrap();
+        client.close().await.unwrap();
+    }
+    
 }

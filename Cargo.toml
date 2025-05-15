@@ -5,6 +5,7 @@ members = [
     "strategy",
     "client",
     "server",
+    "common",
 ]
 resolver = "2"
 
@@ -36,6 +37,7 @@ stockdata = { path = "./stockdata" }
 server = { path = "./server" }
 position = { path = "./position" }
 strategy = { path = "./strategy" }
+common = { path = "./common" }
 
 [workspace.dependencies]
 fantoccini = "0.19.3"

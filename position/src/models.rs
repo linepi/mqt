@@ -33,6 +33,18 @@ impl Position {
             transactions: Vec::new(),
         }
     }
+
+    pub fn info(&self) -> String {
+        format!("股票代码: {}, 股票名称: {}, 持仓数量: {}, 持仓成本: {}, 当前价格: {}, 最后更新时间: {}, 交易记录: {}",
+            self.code,
+            self.name,
+            self.amount,
+            self.cost,
+            self.current_price.unwrap_or(0.0),
+            self.last_update,
+            self.transactions.len()
+        )
+    }
     
     // 计算当前市值
     pub fn market_value(&self) -> Option<f64> {
@@ -166,6 +178,20 @@ impl Portfolio {
             created_at: Utc::now(),
             last_update: Utc::now(),
         }
+    }
+
+    pub fn info(&self) -> String {
+        let position_infos = self.positions.values().map(|p| p.info()).collect::<Vec<String>>().join("\n");
+        format!("组合名称: {}, 现金余额: {}, 持仓数量: {}, 总市值: {}, 总成本: {}, 总盈亏: {}, 总盈亏比例: {}\n持仓信息:\n{}",
+            self.name,
+            self.cash_balance,
+            self.positions.len(),
+            self.total_market_value(),
+            self.total_cost(),
+            self.total_profit_loss(),
+            self.total_profit_loss_percent().unwrap_or(0.0),
+            position_infos
+        )
     }
     
     // 获取总市值

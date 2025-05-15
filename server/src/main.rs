@@ -9,8 +9,8 @@ mod strategy;
 mod stockdata;
 
 // 导入相关函数
-use crate::stockdata::{init_webdriver, close_webdriver, fetch_data, get_stockdata_status, get_stockdata, StockDataState};
-use crate::position::{list_positions, get_portfolio, add_position, remove_position, update_prices, PositionState};
+use crate::stockdata::{init_webdriver, close_webdriver, fetch_data, get_stockdata_status, get_stockdata, get_price, StockDataState};
+use crate::position::{list_positions, get_portfolio, add_position, remove_position, add_portfolio, remove_portfolio, PositionState};
 use crate::strategy::{list_strategies, get_strategy, run_strategy, backtest_strategy, get_backtest_result, StrategyState};
 
 #[actix_web::main]
@@ -49,11 +49,12 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/stockdata")
                     .app_data(web::Data::new(stockdata_state.clone()))
-                    .route("/init", web::post().to(init_webdriver))
-                    .route("/close", web::post().to(close_webdriver))
-                    .route("/fetch", web::post().to(fetch_data))
-                    .route("/status", web::get().to(get_stockdata_status))
-                    .route("/data", web::get().to(get_stockdata))
+                    .service(init_webdriver)
+                    .service(close_webdriver)
+                    .service(fetch_data)
+                    .service(get_price)
+                    .service(get_stockdata_status)
+                    .service(get_stockdata)
             )
             // 注册仓位管理模块API
             .service(
@@ -63,7 +64,8 @@ async fn main() -> std::io::Result<()> {
                     .service(get_portfolio)
                     .service(add_position)
                     .service(remove_position)
-                    .service(update_prices)
+                    .service(add_portfolio)
+                    .service(remove_portfolio)
             )
             // 注册策略模块API
             .service(
@@ -76,7 +78,7 @@ async fn main() -> std::io::Result<()> {
                     .service(get_backtest_result)
             )
     })
-    .bind("127.0.0.1:8080")?
+    .bind(format!("{}:{}", common::constants::IP, common::constants::PORT))?
     .run()
     .await
 } 

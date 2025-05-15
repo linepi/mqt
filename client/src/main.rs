@@ -3,6 +3,7 @@ use reqwest::Client;
 use serde_json::Value;
 use log::info;
 use server::stockdata::FetchRequest;
+use common::constants::BASE_URL;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // 创建HTTP客户端
     let client = Client::new();
-    let base_url = "http://127.0.0.1:8080/api";
+    let base_url = BASE_URL;
     
     println!("欢迎使用量化交易系统客户端");
     println!("输入 'help' 查看可用命令, 输入 'exit' 退出");
@@ -69,8 +70,11 @@ fn print_help() {
     println!("  stockdata close         - 关闭股票数据抓取器");
     println!("  stockdata status        - 查看股票数据抓取器状态");
     println!("  position list           - 列出当前持仓");
-    println!("  position add <code> <amount> - 添加持仓");
-    println!("  position remove <code> <amount> - 减少持仓");
+    println!("  position query_portfolio <name> - 查询投资组合信息");
+    println!("  position add_portfolio <name> <cash_balance> - 添加投资组合");
+    println!("  position remove_portfolio <name> - 删除投资组合");
+    println!("  position add <portfolio> <code> <amount> - 添加持仓");
+    println!("  position remove <portfolio> <code> <amount> - 减少持仓");
     println!("  strategy list           - 列出可用策略");
     println!("  strategy run <name>     - 运行策略");
     println!("  strategy backtest <name> - 回测策略");
@@ -143,14 +147,74 @@ async fn handle_position_command(client: &Client, base_url: &str, cmd: &str) -> 
         } else {
             println!("获取持仓失败: {}", response.text().await?);
         }
+    } else if cmd.starts_with("query_portfolio ") {
+        let parts: Vec<&str> = cmd[16..].split_whitespace().collect();
+        if parts.len() >= 1 {
+            let name = parts[0];
+            let response = client.get(format!("{}/position/query_portfolio", base_url))
+                .json(&serde_json::json!({
+                    "name": name
+                }))
+                .send().await?;
+            if response.status().is_success() {
+                let portfolio: Value = response.json().await?;
+                println!("投资组合信息: {}", portfolio);
+            } else {
+                println!("查询投资组合失败: {}", response.text().await?);
+            }
+        } else {
+            println!("用法: position query_portfolio <name>");
+        }
+    } else if cmd.starts_with("add_portfolio ") {
+        let parts: Vec<&str> = cmd[14..].split_whitespace().collect();
+        if parts.len() >= 2 {
+            let name = parts[0];
+            let cash_balance: f64 = parts[1].parse()?;
+            
+            let response = client.post(format!("{}/position/add_portfolio", base_url))
+                .json(&serde_json::json!({
+                    "name": name,
+                    "cash_balance": cash_balance
+                }))
+                .send().await?;
+                
+            if response.status().is_success() {
+                println!("添加投资组合成功");
+            } else {
+                println!("添加投资组合失败: {}", response.text().await?);
+            }
+        } else {
+            println!("用法: position add_portfolio <name> <cash_balance>");
+        }
+    } else if cmd.starts_with("remove_portfolio ") {
+        let parts: Vec<&str> = cmd[17..].split_whitespace().collect();
+        if parts.len() >= 1 {
+            let name = parts[0];
+            
+            let response = client.post(format!("{}/position/remove_portfolio", base_url))
+                .json(&serde_json::json!({
+                    "name": name,
+                }))
+                .send().await?;
+                
+            if response.status().is_success() {
+                println!("删除投资组合成功");
+            } else {
+                println!("删除投资组合失败: {}", response.text().await?);
+            }
+        } else {
+            println!("用法: position remove_portfolio <name>");
+        }
     } else if cmd.starts_with("add ") {
         let parts: Vec<&str> = cmd[4..].split_whitespace().collect();
-        if parts.len() >= 2 {
-            let code = parts[0];
-            let amount = parts[1];
+        if parts.len() >= 3 {
+            let portfolio = parts[0];
+            let code = parts[1];
+            let amount: f64 = parts[2].parse()?;
             
             let response = client.post(format!("{}/position/add", base_url))
                 .json(&serde_json::json!({
+                    "portfolio": portfolio,
                     "code": code,
                     "amount": amount
                 }))
@@ -162,16 +226,18 @@ async fn handle_position_command(client: &Client, base_url: &str, cmd: &str) -> 
                 println!("添加持仓失败: {}", response.text().await?);
             }
         } else {
-            println!("用法: position add <code> <amount>");
+            println!("用法: position add <portfolio> <code> <amount>");
         }
     } else if cmd.starts_with("remove ") {
         let parts: Vec<&str> = cmd[7..].split_whitespace().collect();
-        if parts.len() >= 2 {
-            let code = parts[0];
-            let amount = parts[1];
+        if parts.len() >= 3 {
+            let portfolio = parts[0];
+            let code = parts[1];
+            let amount: f64 = parts[2].parse()?;
             
             let response = client.post(format!("{}/position/remove", base_url))
                 .json(&serde_json::json!({
+                    "portfolio": portfolio,
                     "code": code,
                     "amount": amount
                 }))
@@ -183,7 +249,7 @@ async fn handle_position_command(client: &Client, base_url: &str, cmd: &str) -> 
                 println!("减少持仓失败: {}", response.text().await?);
             }
         } else {
-            println!("用法: position remove <code> <amount>");
+            println!("用法: position remove <portfolio> <code> <amount>");
         }
     } else {
         println!("未知的持仓命令");

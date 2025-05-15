@@ -17,3 +17,4 @@ reqwest = { workspace = true }
 stockdata = { path = "../stockdata" }
 position = { path = "../position" }
 strategy = { path = "../strategy" }
+common = { path = "../common" }
