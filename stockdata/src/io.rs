@@ -9,11 +9,11 @@ use log::{info, error};
 
 // 将股票数据保存为JSON文件
 pub fn save_to_json(stocks: &[StockData], filename: &str) -> io::Result<()> {
-    // 使用serde_json直接序列化完整对象，确保所有字段都被保存
+    // 使用serde_json直接序列化完整对象, 确保所有字段都被保存
     let json_string = serde_json::to_string_pretty(stocks)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     
-    // 写入文件，使用UTF-8编码
+    // 写入文件, 使用UTF-8编码
     let file = File::create(filename)?;
     let mut writer = BufWriter::new(file);
     writer.write_all(json_string.as_bytes())?;
@@ -50,7 +50,7 @@ pub fn get_timestamped_filename(dir: &str, prefix: &str, extension: &str) -> Str
             if extension.starts_with('.') { extension.to_string() } else { format!(".{}", extension) })
 }
 
-// 保存股票数据到文件，自动生成文件名
+// 保存股票数据到文件, 自动生成文件名
 pub fn save_stock_data(stocks: &[StockData]) -> io::Result<String> {
     // 创建输出目录
     let output_dir = "output";
@@ -76,17 +76,17 @@ pub fn save_stock_data(stocks: &[StockData]) -> io::Result<String> {
 
 // 合并多个股票数据来源
 pub fn merge_stock_data_sources(data_sources: &[Vec<StockData>]) -> Vec<StockData> {
-    // 创建一个映射，用股票代码做键
+    // 创建一个映射, 用股票代码做键
     let mut merged_stocks: HashMap<String, StockData> = HashMap::new();
     
     // 遍历所有数据源
     for source in data_sources {
         for stock in source {
-            // 如果股票代码已经存在于映射中，则合并数据
+            // 如果股票代码已经存在于映射中, 则合并数据
             if let Some(existing_stock) = merged_stocks.get_mut(&stock.code) {
                 merge_stock_data(existing_stock, stock);
             } else {
-                // 否则，添加新的股票数据
+                // 否则, 添加新的股票数据
                 merged_stocks.insert(stock.code.clone(), stock.clone());
             }
         }

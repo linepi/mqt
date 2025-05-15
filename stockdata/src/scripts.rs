@@ -219,17 +219,17 @@ pub fn get_data_extraction_script(tab: &TabType) -> String {
                     case 'technicals':
                         // 技术指标标签页
                         if (cells[1]) {{
-                            // 处理技术评级，这可能是带有div的
+                            // 处理技术评级, 这可能是带有div的
                             const technicalRatingDiv = cells[1].querySelector('div');
                             rowData.technicalRating = technicalRatingDiv ? technicalRatingDiv.textContent.trim() : cells[1].textContent.trim();
                         }}
                         if (cells[2]) {{
-                            // 处理MA评级，这可能是带有div的
+                            // 处理MA评级, 这可能是带有div的
                             const maRatingDiv = cells[2].querySelector('div');
                             rowData.maRating = maRatingDiv ? maRatingDiv.textContent.trim() : cells[2].textContent.trim();
                         }}
                         if (cells[3]) {{
-                            // 处理振荡指标评级，这可能是带有div的
+                            // 处理振荡指标评级, 这可能是带有div的
                             const oscRatingDiv = cells[3].querySelector('div');
                             rowData.oscillatorsRating = oscRatingDiv ? oscRatingDiv.textContent.trim() : cells[3].textContent.trim();
                         }}

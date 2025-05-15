@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::process::{Command, Child};
 use fantoccini::Client;
 use serde_json::{self, Value};
 use crate::tabs::TabType;
@@ -36,6 +36,35 @@ pub fn start_chromedriver() -> Result<std::process::Child, std::io::Error> {
         .spawn()
 }
 
+pub async fn create_webdriver_client() -> Result<(Child, Client), Box<dyn std::error::Error>> {
+    // 初始化WebDriver配置
+    let caps = init_webdriver_config();
+    
+    // 启动ChromeDriver
+    let mut chrome_driver = match start_chromedriver() {
+        Ok(driver) => driver,
+        Err(e) => {
+            let err_msg = format!("启动ChromeDriver失败: {}", e);
+            error!("{}", err_msg);
+            return Err(err_msg.into());
+        }
+    };
+    
+    // 连接到WebDriver - 简化此处代码, 移除临时变量
+    let client = match 
+        fantoccini::ClientBuilder::native().capabilities(caps).connect("http://localhost:9516").await {
+        Ok(client) => client,
+        Err(e) => {
+            let _ = chrome_driver.kill();
+            let err_msg = format!("连接到WebDriver失败: {}", e);
+            error!("{}", err_msg);
+            return Err(err_msg.into());
+        }
+    };
+    
+    Ok((chrome_driver, client))
+}
+
 pub async fn scroll_to_load_all(client: &fantoccini::Client) -> Result<(), Box<dyn std::error::Error>> {
     let mut last_count = 0;
     let mut noupdate_times = 0;
@@ -63,8 +92,8 @@ pub async fn scroll_to_load_all(client: &fantoccini::Client) -> Result<(), Box<d
     Ok(())
 }
 
-// interval: 间隔时间，单位：毫秒
-// timeout: 超时时间，单位：毫秒
+// interval: 间隔时间, 单位：毫秒
+// timeout: 超时时间, 单位：毫秒
 pub async fn wait_until_script_return_true(client: &Client, script: &str, interval: u64, timeout: u64) -> Result<(), Box<dyn std::error::Error>> {
     let mut result = false;
     let start_time = std::time::Instant::now();
@@ -100,7 +129,7 @@ pub async fn switch_to_tab(client: &Client, tab: TabType) -> Result<(), Box<dyn 
     Ok(())
 }
 
-// 使用JavaScript执行数据抓取，获取所有标签页的股票数据
+// 使用JavaScript执行数据抓取, 获取所有标签页的股票数据
 pub async fn fetch_stock_data(client: &Client) -> Result<Vec<StockData>, Box<dyn std::error::Error>> {
     info!("开始从所有标签页获取股票数据...");
     
@@ -151,3 +180,55 @@ pub async fn fetch_stock_data_from_tab(client: &Client, tab: TabType) -> Result<
     info!("已从{}标签页获取{}支股票的数据", tab.name(), stocks.len());
     Ok(stocks)
 } 
+
+pub async fn perform_fetch(
+    client: Client, 
+    save_to_file: bool
+) -> Result<Vec<StockData>, Box<dyn std::error::Error>> {
+    // 打开TradingView筛选器页面
+    match client.goto("https://cn.tradingview.com/screener/").await {
+        Ok(_) => {},
+        Err(e) => {
+            return Err(format!("打开TradingView页面失败: {}", e).into());
+        }
+    }
+    
+    // 等待页面加载完成
+    match wait_until_script_return_true(
+        &client, 
+        scripts::get_page_loaded_check_script(), 
+        200, 
+        10000
+    ).await {
+        Ok(_) => {},
+        Err(e) => {
+            return Err(format!("等待页面加载失败: {}", e.to_string()).into());
+        }
+    }
+
+    match scroll_to_load_all(&client).await {
+        Ok(_) => {},
+        Err(e) => {
+            return Err(format!("滚动加载失败: {}", e.to_string()).into());
+        }
+    }
+    
+    // 获取所有标签页的股票数据
+    let stocks = match fetch_stock_data(&client).await {
+        Ok(stocks) => stocks,
+        Err(e) => {
+            return Err(format!("获取股票数据失败: {}", e.to_string()).into());
+        }
+    };
+    
+    // 如果需要保存到文件
+    if save_to_file {
+        if let Err(e) = crate::io::save_stock_data(&stocks) {
+            error!("保存数据到文件失败: {}", e);
+        } else {
+            info!("数据已保存到文件");
+        }
+    }
+    
+    Ok(stocks)
+}

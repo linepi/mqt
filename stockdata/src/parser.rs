@@ -14,7 +14,7 @@ pub fn parse_stock_data_from_json(js_data: Value, tab: TabType) -> Result<Vec<St
             if let Some(code) = item.get("code").and_then(|v| v.as_str()) {
                 stock.code = code.to_string();
             } else {
-                // 如果没有代码，跳过此条记录
+                // 如果没有代码, 跳过此条记录
                 continue;
             }
             

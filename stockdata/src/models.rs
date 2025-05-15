@@ -38,7 +38,7 @@ pub struct StockData {
     pub price: f64,                  // 当前价格
     
     // 概览标签页
-    pub change_percent: f64,      // 涨跌幅，负值表示下跌，正值表示上涨
+    pub change_percent: f64,      // 涨跌幅, 负值表示下跌, 正值表示上涨
     pub volume: i64,              // 成交量
     pub relative_volume: f64,        // 相对成交量
     pub market_cap: i64,          // 市值（单位：人民币）
@@ -154,7 +154,7 @@ pub struct StockData {
 
 // 字符串转换为数值的辅助函数
 pub fn parse_f64(s: &str) -> f64 {
-    // 移除百分号、逗号、货币符号和引号，并转换为浮点数
+    // 移除百分号、逗号、货币符号和引号, 并转换为浮点数
     let s = s.trim()
         .replace("%", "")
         .replace(',', "")
@@ -185,7 +185,7 @@ pub fn parse_f64(s: &str) -> f64 {
 // 解析百分比为浮点数
 pub fn parse_percentage(s: &str) -> f64 {
     let value = parse_f64(s);
-    // 百分比返回的是实际数值，不需要除以100
+    // 百分比返回的是实际数值, 不需要除以100
     value
 }
 
@@ -240,7 +240,7 @@ pub fn parse_large_number(s: &str) -> i64 {
             }
         }
     } else {
-        // 没有单位，直接解析
+        // 没有单位, 直接解析
         if let Ok(num) = s.parse::<f64>() {
             value = num * multiplier;
         }
@@ -249,7 +249,7 @@ pub fn parse_large_number(s: &str) -> i64 {
     value as i64
 }
 
-// 合并两个股票数据，将src中的非零值合并到dest中
+// 合并两个股票数据, 将src中的非零值合并到dest中
 pub fn merge_stock_data(dest: &mut StockData, src: &StockData) {
     // 基本信息
     if dest.name.is_empty() && !src.name.is_empty() {
