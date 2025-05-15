@@ -7,6 +7,7 @@ mod tabs;    // 标签页类型
 mod scraper; // 网页抓取
 mod parser;  // 数据解析
 mod io;      // 输入输出处理
+mod scripts; // JavaScript脚本
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +25,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // 打开TradingView筛选器页面
     client.goto("https://cn.tradingview.com/screener/").await?;
-    println!("等待页面加载中...");
+    scraper::wait_until_script_return_true(
+        &client, 
+        scripts::get_page_loaded_check_script(), 
+        200, 
+        10000
+    ).await?;
     
     // 加载所有数据
     // scraper::scroll_to_load_all(&client).await?;
