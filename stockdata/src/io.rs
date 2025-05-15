@@ -5,6 +5,7 @@ use chrono::Local;
 use crate::models::StockData;
 use std::collections::HashMap;
 use crate::models::merge_stock_data;
+use log::{info, error};
 
 // 将股票数据保存为JSON文件
 pub fn save_to_json(stocks: &[StockData], filename: &str) -> io::Result<()> {
@@ -21,6 +22,7 @@ pub fn save_to_json(stocks: &[StockData], filename: &str) -> io::Result<()> {
 }
 
 // 从JSON文件读取股票数据
+#[allow(dead_code)]
 pub fn load_from_json(filename: &str) -> io::Result<Vec<StockData>> {
     let file_content = fs::read_to_string(filename)?;
     let stocks: Vec<StockData> = serde_json::from_str(&file_content)
@@ -53,7 +55,7 @@ pub fn save_stock_data(stocks: &[StockData]) -> io::Result<String> {
     // 创建输出目录
     let output_dir = "output";
     if let Err(e) = create_output_dir(output_dir) {
-        eprintln!("创建输出目录失败: {}, 将保存到当前目录", e);
+        error!("创建输出目录失败: {}, 将保存到当前目录", e);
     }
     
     // 生成带时间戳的文件名
@@ -62,11 +64,11 @@ pub fn save_stock_data(stocks: &[StockData]) -> io::Result<String> {
     // 保存数据到文件
     match save_to_json(stocks, &json_filename) {
         Ok(_) => {
-            println!("数据已保存到 {}", json_filename);
+            info!("数据已保存到 {}", json_filename);
             Ok(json_filename)
         },
         Err(e) => {
-            eprintln!("保存JSON文件失败: {}", e);
+            error!("保存JSON文件失败: {}", e);
             Err(e)
         }
     }
@@ -97,7 +99,6 @@ pub fn merge_stock_data_sources(data_sources: &[Vec<StockData>]) -> Vec<StockDat
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::Rating;
     
     #[test]
     fn test_merge_stock_data_sources() {

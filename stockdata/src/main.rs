@@ -1,5 +1,6 @@
-use fantoccini;
-use tokio;
+use std::env;
+use log::info;
+use std::io as std_io;
 
 // 导入这些模块
 mod models;  // 数据模型
@@ -8,43 +9,21 @@ mod scraper; // 网页抓取
 mod parser;  // 数据解析
 mod io;      // 输入输出处理
 mod scripts; // JavaScript脚本
+mod server;  // HTTP服务器
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 初始化WebDriver配置
-    let caps = scraper::init_webdriver_config();
+#[actix_web::main]
+async fn main() -> std_io::Result<()> {
+    // 初始化日志
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     
-    // 启动ChromeDriver
-    let mut chrome_driver = scraper::start_chromedriver()?;
+    // 获取端口，默认为8080
+    let port = match env::var("PORT") {
+        Ok(port_str) => port_str.parse::<u16>().unwrap_or(8080),
+        Err(_) => 8080,
+    };
     
-    // 连接到WebDriver
-    let client = fantoccini::ClientBuilder::native()
-        .capabilities(caps)
-        .connect("http://localhost:9516")
-        .await?;
+    info!("股票数据服务启动，端口：{}", port);
     
-    // 打开TradingView筛选器页面
-    client.goto("https://cn.tradingview.com/screener/").await?;
-    scraper::wait_until_script_return_true(
-        &client, 
-        scripts::get_page_loaded_check_script(), 
-        200, 
-        10000
-    ).await?;
-    
-    // 加载所有数据
-    // scraper::scroll_to_load_all(&client).await?;
-    
-    // 获取所有标签页的股票数据
-    let stocks = scraper::fetch_stock_data(&client).await?;
-    
-    // 保存股票数据
-    io::save_stock_data(&stocks)?;
-    
-    // 关闭浏览器和ChromeDriver
-    client.close().await?;
-    chrome_driver.kill()?;
-    
-    println!("数据抓取和保存完成。");
-    Ok(())
+    // 启动HTTP服务器
+    server::start_server(port).await
 }

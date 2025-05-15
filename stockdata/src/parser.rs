@@ -109,8 +109,8 @@ pub fn parse_stock_data_from_json(js_data: Value, tab: TabType) -> Result<Vec<St
                         stock.performance_10y = parse_percentage(perf10y);
                     }
                     
-                    if let Some(perfAll) = item.get("performanceAll").and_then(|v| v.as_str()) {
-                        stock.performance_all = parse_percentage(perfAll);
+                    if let Some(perf_all) = item.get("performanceAll").and_then(|v| v.as_str()) {
+                        stock.performance_all = parse_percentage(perf_all);
                     }
                     
                     if let Some(vol1w) = item.get("volatility1w").and_then(|v| v.as_str()) {

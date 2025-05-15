@@ -1,9 +1,10 @@
 use std::process::Command;
-use fantoccini::{Client, ClientBuilder};
+use fantoccini::Client;
 use serde_json::{self, Value};
 use crate::tabs::TabType;
 use crate::models::StockData;
 use crate::scripts;
+use log::{info, error};
 
 // 初始化WebDriver配置
 pub fn init_webdriver_config() -> serde_json::map::Map<String, serde_json::Value> {
@@ -80,7 +81,7 @@ pub async fn wait_until_script_return_true(client: &Client, script: &str, interv
 
 // 切换到指定标签页
 pub async fn switch_to_tab(client: &Client, tab: TabType) -> Result<(), Box<dyn std::error::Error>> {
-    println!("切换到{}标签页...", tab.name());
+    info!("切换到{}标签页...", tab.name());
     
     let js_click = scripts::get_tab_click_script(tab.id());
     
@@ -101,7 +102,7 @@ pub async fn switch_to_tab(client: &Client, tab: TabType) -> Result<(), Box<dyn 
 
 // 使用JavaScript执行数据抓取，获取所有标签页的股票数据
 pub async fn fetch_stock_data(client: &Client) -> Result<Vec<StockData>, Box<dyn std::error::Error>> {
-    println!("开始从所有标签页获取股票数据...");
+    info!("开始从所有标签页获取股票数据...");
     
     // 存储每个标签页的数据集合
     let mut tab_data_sources = Vec::new();
@@ -110,11 +111,11 @@ pub async fn fetch_stock_data(client: &Client) -> Result<Vec<StockData>, Box<dyn
     for tab in TabType::all().iter() {
         match fetch_stock_data_from_tab(client, *tab).await {
             Ok(tab_stocks) => {
-                println!("成功获取{}标签页数据: {}支股票", tab.name(), tab_stocks.len());
+                info!("成功获取{}标签页数据: {}支股票", tab.name(), tab_stocks.len());
                 tab_data_sources.push(tab_stocks);
             },
             Err(e) => {
-                eprintln!("获取{}标签页数据失败: {}", tab.name(), e);
+                error!("获取{}标签页数据失败: {}", tab.name(), e);
             }
         }
     }
@@ -122,7 +123,7 @@ pub async fn fetch_stock_data(client: &Client) -> Result<Vec<StockData>, Box<dyn
     // 使用merge_stock_data_sources函数合并所有标签页的数据
     let all_stock_data = crate::io::merge_stock_data_sources(&tab_data_sources);
     
-    println!("成功获取并合并{}支股票的数据", all_stock_data.len());
+    info!("成功获取并合并{}支股票的数据", all_stock_data.len());
     Ok(all_stock_data)
 }
 
@@ -132,7 +133,7 @@ pub async fn fetch_stock_data_from_tab(client: &Client, tab: TabType) -> Result<
     switch_to_tab(client, tab).await?;
     
     // 执行JavaScript获取实际内容
-    println!("正在从{}标签页获取数据...", tab.name());
+    info!("正在从{}标签页获取数据...", tab.name());
     
     // 获取原始JavaScript执行结果
     let js_result = client.execute(
@@ -147,6 +148,6 @@ pub async fn fetch_stock_data_from_tab(client: &Client, tab: TabType) -> Result<
     // 使用解析器将JSON值转换为StockData对象
     let stocks = crate::parser::parse_stock_data_from_json(json_data, tab)?;
     
-    println!("已从{}标签页获取{}支股票的数据", tab.name(), stocks.len());
+    info!("已从{}标签页获取{}支股票的数据", tab.name(), stocks.len());
     Ok(stocks)
 } 
