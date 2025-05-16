@@ -16,7 +16,17 @@ impl<'a> PositionManager<'a> {
         let response = reqwest::get(url).await?;
         
         // 直接解析返回的单个对象
-        let price: f64 = response.json().await?;
+        let price = if response.status().is_success() {
+            match response.json::<serde_json::Value>().await? {
+                serde_json::Value::Number(n) => n.as_f64().ok_or("价格不是有效的数字")?,
+                serde_json::Value::Object(_) => {
+                    return Err("返回数据格式错误: map".into());
+                },
+                _ => return Err("返回数据格式错误".into())
+            }
+        } else {
+            return Err(format!("获取价格失败: {}", response.status()).into());
+        };
 
         let transaction = Transaction::new(
             code,

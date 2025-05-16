@@ -151,14 +151,14 @@ async fn handle_position_command(client: &Client, base_url: &str, cmd: &str) -> 
         let parts: Vec<&str> = cmd[16..].split_whitespace().collect();
         if parts.len() >= 1 {
             let name = parts[0];
-            let response = client.get(format!("{}/position/query_portfolio", base_url))
+            let response = client.post(format!("{}/position/query_portfolio", base_url))
                 .json(&serde_json::json!({
                     "name": name
                 }))
                 .send().await?;
             if response.status().is_success() {
-                let portfolio: Value = response.json().await?;
-                println!("投资组合信息: {}", portfolio);
+                let portfolio: server::position::QueryPortfolioResponse = response.json().await?;
+                println!("投资组合信息: {}", serde_json::to_string(&portfolio).unwrap());
             } else {
                 println!("查询投资组合失败: {}", response.text().await?);
             }

@@ -69,7 +69,7 @@ pub async fn get_strategy(
     if let Some(strategy) = state.strategies.get(&name) {
         HttpResponse::Ok().json(strategy)
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({
+        HttpResponse::BadRequest().json(serde_json::json!({
             "error": format!("未找到策略: {}", name)
         }))
     }
@@ -93,7 +93,7 @@ pub async fn run_strategy(
             "strategy": strategy
         }))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({
+        HttpResponse::BadRequest().json(serde_json::json!({
             "error": format!("未找到策略: {}", req.name)
         }))
     }
@@ -142,7 +142,7 @@ pub async fn backtest_strategy(
         
         HttpResponse::Ok().json(result)
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({
+        HttpResponse::BadRequest().json(serde_json::json!({
             "error": format!("未找到策略: {}", req.name)
         }))
     }
@@ -162,7 +162,7 @@ pub async fn get_backtest_result(
     if let Some(result) = state.backtest_results.get(&name) {
         HttpResponse::Ok().json(result)
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({
+        HttpResponse::BadRequest().json(serde_json::json!({
             "error": format!("未找到策略 {} 的回测结果", name)
         }))
     }

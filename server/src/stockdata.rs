@@ -209,8 +209,8 @@ pub async fn get_price(state: web::Data<Arc<Mutex<StockDataState>>>,
     web::Query(params): web::Query<HashMap<String, String>>) -> impl Responder {
     info!("获取股票价格");
     
-    let client_option = {
-        let mut state = state.lock().unwrap();
+    let client = {
+        let state = state.lock().unwrap();
         
         if state.is_fetching {
             return HttpResponse::BadRequest().json(serde_json::json!({
@@ -224,14 +224,14 @@ pub async fn get_price(state: web::Data<Arc<Mutex<StockDataState>>>,
             }));
         }
         
-        state.is_fetching = true;
         state.client.as_ref().unwrap().clone()
     };
 
     let mut state = state.lock().unwrap();
 
     if state.fetched_price.is_empty() || Utc::now().signed_duration_since(state.fetched_price_last_fetch.unwrap()) > chrono::Duration::seconds(60) {
-        let price_map = stockdata::scraper::fetch_price(&client_option).await; 
+        state.is_fetching = true;
+        let price_map = stockdata::scraper::fetch_price(&client).await; 
         state.is_fetching = false;
 
         state.fetched_price = match price_map {
@@ -251,13 +251,16 @@ pub async fn get_price(state: web::Data<Arc<Mutex<StockDataState>>>,
     // 检查是否提供了code参数
     if let Some(code) = params.get("code") {
         if let Some(price) = state.fetched_price.get(code) {
+            info!("获取股票价格: {}: {}", code, price);
             HttpResponse::Ok().json(price)
         } else {
-            HttpResponse::NotFound().json(serde_json::json!({
+            info!("未找到代码为{}的股票价格", code);
+            HttpResponse::BadRequest().json(serde_json::json!({
                 "error": format!("未找到代码为{}的股票价格", code)
             }))
         }
     } else {
+        info!("获取所有股票价格");
         HttpResponse::Ok().json(&state.fetched_price)
     }
 }
@@ -271,7 +274,7 @@ pub async fn get_stockdata(state: web::Data<Arc<Mutex<StockDataState>>>,
     let state = state.lock().unwrap();
     
     if state.fetched_data.is_empty() {
-        return HttpResponse::NotFound().json(serde_json::json!({
+        return HttpResponse::BadRequest().json(serde_json::json!({
             "error": "暂无数据, 请先调用/fetch接口抓取数据"
         }));
     }
@@ -284,7 +287,7 @@ pub async fn get_stockdata(state: web::Data<Arc<Mutex<StockDataState>>>,
             .collect();
             
         if filtered_data.is_empty() {
-            return HttpResponse::NotFound().json(serde_json::json!({
+            return HttpResponse::BadRequest().json(serde_json::json!({
                 "error": format!("未找到代码为{}的股票数据", code)
             }));
         }

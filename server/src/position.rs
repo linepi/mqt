@@ -43,6 +43,18 @@ pub struct RemovePositionRequest {
     pub amount: f64,
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct QueryPortfolioRequest {
+    pub name: String,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct QueryPortfolioResponse {
+    pub name: String,
+    pub cash_balance: f64,
+    pub positions: Vec<position::models::Position>,
+}
+
 // 获取所有持仓
 #[get("/list")]
 pub async fn list_positions(state: web::Data<Arc<Mutex<PositionState>>>) -> impl Responder {
@@ -56,14 +68,18 @@ pub async fn list_positions(state: web::Data<Arc<Mutex<PositionState>>>) -> impl
 
 // 获取投资组合信息
 #[post("/query_portfolio")]
-pub async fn get_portfolio(state: web::Data<Arc<Mutex<PositionState>>>, req: web::Json<String>) -> impl Responder {
+pub async fn get_portfolio(state: web::Data<Arc<Mutex<PositionState>>>, req: web::Json<QueryPortfolioRequest>) -> impl Responder {
     info!("获取投资组合信息");
     
     let state = state.lock().unwrap();
 
-    match state.portfolios.iter().find(|p| p.name == req.0) {
-        Some(portfolio) => HttpResponse::Ok().json(portfolio.info()),
-        None => HttpResponse::NotFound().json(serde_json::json!({ "error": "投资组合不存在" }))
+    match state.portfolios.iter().find(|p| p.name == req.name) {
+        Some(portfolio) => HttpResponse::Ok().json(QueryPortfolioResponse {
+            name: portfolio.name.clone(),
+            cash_balance: portfolio.cash_balance,
+            positions: portfolio.positions.values().cloned().collect(),
+        }),
+        None => HttpResponse::BadRequest().json(serde_json::json!({ "error": "投资组合不存在" }))
     }
 }
 
