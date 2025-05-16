@@ -1,7 +1,10 @@
+use std::io::{self, Write};
 use actix_web::{web, App, HttpServer};
 use actix_cors::Cors;
-use log::info;
+use log::{info, LevelFilter};
 use std::sync::{Arc, Mutex};
+use std::fs::File;
+use std::path::Path;
 
 mod server;
 mod position;
@@ -18,10 +21,22 @@ async fn main() -> std::io::Result<()> {
     // 设置环境变量
     std::env::set_var("RUST_LOG", "info");
     std::env::set_var("LANG", "zh_CN.UTF-8");
-    
-    // 初始化日志系统
-    env_logger::init();
-    
+
+    // 初始化日志系统，同时写入文件和控制台
+    env_logger::Builder::new()
+        .filter_level(LevelFilter::Info)  // 明确设置日志级别
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "[{} {}:{}] {}",
+                record.level(),
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .init();
+
     info!("启动交易系统服务器...");
     
     // 创建服务器状态

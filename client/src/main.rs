@@ -12,7 +12,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("LANG", "zh_CN.UTF-8");
     
     // 初始化日志系统
-    env_logger::init();
+    env_logger::Builder::new()
+        .target(env_logger::Target::Stdout)
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "[{}] ({}:{}) - {}",
+                record.level(),
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .init();
     
     info!("启动交易系统客户端...");
     
@@ -65,6 +77,7 @@ fn print_help() {
     println!("  help                    - 显示帮助信息");
     println!("  exit, quit              - 退出客户端");
     println!("  status                  - 检查服务器状态");
+    println!("  stockdata price <code>  - 获取股票价格");
     println!("  stockdata init          - 初始化股票数据抓取器");
     println!("  stockdata fetch         - 抓取股票数据");
     println!("  stockdata close         - 关闭股票数据抓取器");
@@ -128,6 +141,13 @@ async fn handle_stockdata_command(client: &Client, base_url: &str, cmd: &str) ->
                 println!("股票数据抓取器状态: {}", status);
             } else {
                 println!("获取状态失败: {}", response.text().await?);
+            }
+        },
+        "price" => {
+            let response = client.get(format!("{}/stockdata/price", base_url)).send().await?;
+            if response.status().is_success() {
+                let price: Value = response.json().await?;
+                println!("股票价格: {}", price);
             }
         },
         _ => {
